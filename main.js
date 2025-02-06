@@ -43,7 +43,7 @@ let gameState = "PLAYING"; // TITLE, PLAYING
 
 function preload() {
 
-  partyConnect("wss://p5js-spaceman-server-29f6636dfb6c.herokuapp.com", "jkv-MultiPlayerPoc");
+  partyConnect("wss://p5js-spaceman-server-29f6636dfb6c.herokuapp.com", "jkh-flightgamev24c");
   me = partyLoadMyShared({ playerName: "observer" });
   guests = partyLoadGuestShareds();
 
