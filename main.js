@@ -2,6 +2,41 @@ const gameConstants = { planetDiameter: 350, bulletSpeed: 2, bulletDiameter: 10 
 
 let xText;
 
+class Bullet {
+  constructor(x, y, xMouse, yMouse) {
+    this.x = x;
+    this.y = y;
+    this.xStart = x;
+    this.yStart = y;
+    this.xMouseStart = xMouse;
+    this.yMouseStart = yMouse;
+  }
+
+  draw() {
+    fill('yellow');
+    push();
+    imageMode(CENTER);
+    translate(this.x, this.y);
+    let head = createVector(
+      this.xMouseStart - this.xStart,
+      this.yMouseStart - this.yStart,
+    ).normalize().heading();
+    rotate(head + 1.555);
+    rect(-3, -3, 10, 10);
+    pop();
+  }
+
+  move() {
+    let bulletVector = createVector(
+      int(this.xMouseStart) - this.xStart,
+      int(this.yMouseStart) - this.yStart,
+    ).normalize();
+    this.x += bulletVector.x * gameConstants.bulletSpeed;
+    this.y += bulletVector.y * gameConstants.bulletSpeed;
+    return onScreen(this.x, this.y);
+  }
+}
+
 class Flight {
   constructor(config) {
     this.playerNumber = config.playerNumber;
@@ -42,24 +77,8 @@ class Flight {
 
   drawBullets() {
     if (this.buls) {
-      this.buls.forEach(bullet => {
-        this.drawBullet(bullet);
-      });
+      this.buls.forEach(bullet => bullet.draw());
     }
-  }
-
-  drawBullet(bullet) {
-    fill('yellow');
-    push();
-    imageMode(CENTER);
-    translate(bullet.x, bullet.y);
-    let head = createVector(
-      bullet.xMouseStart - bullet.xStart,
-      bullet.yMouseStart - bullet.yStart,
-    ).normalize().heading();
-    rotate(head + 1.555);
-    rect(-3, -3, 10, 10);
-    pop();
   }
 
   drawScore() {
@@ -81,28 +100,14 @@ class Flight {
   }
 
   shoot() {
-    let bullet = {
-      x: this.x,
-      y: this.y,
-      xStart: this.x,
-      yStart: this.y,
-      xMouseStart: mouseX,
-      yMouseStart: mouseY
-    };
+    let bullet = new Bullet(this.x, this.y, mouseX, mouseY);
     this.buls.push(bullet);
   }
 
   moveBullets() {
     for (let i = this.buls.length - 1; i >= 0; i--) {
-      let bullet = this.buls[i];
-      let bulletVector = createVector(
-        int(bullet.xMouseStart) - bullet.xStart,
-        int(bullet.yMouseStart) - bullet.yStart,
-      ).normalize();
-      bullet.x += bulletVector.x * 2;
-      bullet.y += bulletVector.y * 2;
-
-      if (!onScreen(bullet.x, bullet.y)) {
+      const isOnScreen = this.buls[i].move();
+      if (!isOnScreen) {
         this.buls.splice(i, 1);
       }
     }
