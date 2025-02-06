@@ -1,125 +1,9 @@
 const gameConstants = { planetDiameter: 350, bulletSpeed: 2, bulletDiameter: 10 }
 
+let counter = 0
 let xText;
-
-class Bullet {
-  constructor(x, y, xMouse, yMouse) {
-    this.x = x;
-    this.y = y;
-    this.xStart = x;
-    this.yStart = y;
-    this.xMouseStart = xMouse;
-    this.yMouseStart = yMouse;
-  }
-
-  draw() {
-    fill('yellow');
-    push();
-    imageMode(CENTER);
-    translate(this.x, this.y);
-    let head = createVector(
-      this.xMouseStart - this.xStart,
-      this.yMouseStart - this.yStart,
-    ).normalize().heading();
-    rotate(head + 1.555);
-    rect(-3, -3, 10, 10);
-    pop();
-  }
-
-  move() {
-    let bulletVector = createVector(
-      int(this.xMouseStart) - this.xStart,
-      int(this.yMouseStart) - this.yStart,
-    ).normalize();
-    this.x += bulletVector.x * gameConstants.bulletSpeed;
-    this.y += bulletVector.y * gameConstants.bulletSpeed;
-    return onScreen(this.x, this.y);
-  }
-}
-
-class Flight {
-  constructor(config) {
-    this.playerNumber = config.playerNumber;
-    this.playerName = config.playerName;
-    this.x = config.x;
-    this.y = config.y;
-    this.r = config.r;
-    this.xMouse = config.xMouse;
-    this.yMouse = config.yMouse;
-    this.spawnX = config.spawnX;
-    this.spawnY = config.spawnY;
-    this.color = config.color;
-    this.buls = config.buls || [];
-    this.hits = config.hits || [0, 0];
-    this.rotation = config.rotation;
-  }
-
-  draw() {
-    this.drawFlight();
-    this.drawBullets();
-    this.drawScore();
-  }
-
-  drawFlight() {
-    fill(this.color);
-    push();
-    imageMode(CENTER);
-    translate(this.x, this.y);
-    let head = createVector(
-      this.xMouse - this.x,
-      this.yMouse - this.y,
-    ).normalize().heading();
-    rotate(head + 1.555);
-    rect(-10, -10, 30, 30);
-    rect(0, -15, 10, 15);
-    pop();
-  }
-
-  drawBullets() {
-    if (this.buls) {
-      this.buls.forEach(bullet => bullet.draw());
-    }
-  }
-
-  drawScore() {
-    fill(this.color);
-    xText += 30;
-    if (this.playerName === "player0") {
-      if (this.hits) {
-        text("Player0 (" + this.hits[1] + ")", 320, xText);
-      } else {
-        text("Player0", 320, xText);
-      }
-    } else if (this.playerName === "player1") {
-      if (this.hits) {
-        text("Player1 (" + this.hits[0] + ")", 320, xText);
-      } else {
-        text("Player1", 320, xText);
-      }
-    }
-  }
-
-  shoot() {
-    let bullet = new Bullet(this.x, this.y, mouseX, mouseY);
-    this.buls.push(bullet);
-  }
-
-  moveBullets() {
-    for (let i = this.buls.length - 1; i >= 0; i--) {
-      const isOnScreen = this.buls[i].move();
-      if (!isOnScreen) {
-        this.buls.splice(i, 1);
-      }
-    }
-  }
-
-  syncFromShared(sharedFlight) {
-    Object.assign(this, sharedFlight);
-  }
-}
-
 const flights = [
-  new Flight({
+  {
     playerNumber: 0,
     playerName: "player0",
     x: 100,
@@ -130,8 +14,14 @@ const flights = [
     spawnX: 100,
     spawnY: 100,
     color: 'green',
-  }),
-  new Flight({
+    buls: [],
+    // Contains number of times "me" has hit the different flights
+    // The playerNumber is the index on the tables.
+    // If hits[5] = 3, then the flight with playerNumber 5 has been
+    // hit 3 times by "me"
+    hits: [0, 0],
+  },
+  {
     playerNumber: 1,
     playerName: "player1",
     x: 200,
@@ -142,16 +32,18 @@ const flights = [
     spawnX: 200,
     spawnY: 200,
     color: 'blue',
-  })
+    buls: [],
+    hits: [0, 0],
+  },
 ];
 
 let me;
 let guests;
-let gameState = "PLAYING";
+let gameState = "PLAYING"; // TITLE, PLAYING
 
 function preload() {
 
-  partyConnect("wss://p5js-spaceman-server-29f6636dfb6c.herokuapp.com", "jkh-MultiPlayerPoc");
+  partyConnect("wss://p5js-spaceman-server-29f6636dfb6c.herokuapp.com", "jkv-MultiPlayerPoc");
   me = partyLoadMyShared({ playerName: "observer" });
   guests = partyLoadGuestShareds();
 
@@ -163,6 +55,7 @@ function preload() {
 function setup() {
   createCanvas(400, 400);
 
+  // Move this when entry screen is added
   if (me.playerName !== "player0" && me.playerName !== "player1") {
     joinGame();
     return;
@@ -179,13 +72,19 @@ function draw() {
     console.log("I am host")
     fill('yellow')
     text('I am host', 10, 10);
+    //      stepHost();
   }
 
-  text(me.playerName, 10, 25);
-  text("Left: F", 10, 40);
-  text("Right: H", 10, 55);
-  text("Up: T", 10, 70);
-  text("Down: G", 10, 85);
+  text(me.playerName, 10, 30);
+  /*
+    if (counter < 1) {
+      console.log({ guests })
+      console.log({ me })
+      //    console.log({ sharedBullet0Player0 })
+      //    console.log({ sharedBullet1Player0 })
+      counter++
+    }
+      */
 
   if (gameState === "PLAYING") {
     stepLocal();
@@ -221,18 +120,25 @@ function moveMe() {
   me.xMouse = mouseX;
   me.yMouse = mouseY;
 
-  const myFlight = flights.find(f => f.playerName === me.playerName);
-  if (myFlight) {
-    myFlight.x = me.x;
-    myFlight.y = me.y;
-    myFlight.xMouse = me.xMouse;
-    myFlight.yMouse = me.yMouse;
-    myFlight.buls = me.buls;
-    myFlight.moveBullets();
-    me.buls = myFlight.buls;
+  moveBullets();
+}
+function moveBullets() {
+
+  for (let i = me.buls.length - 1; i >= 0; i--) {
+
+    let bullet = me.buls[i];
+    let bulletVector = createVector(
+      int(bullet.xMouseStart) - bullet.xStart,
+      int(bullet.yMouseStart) - bullet.yStart,
+    ).normalize();
+    bullet.x += bulletVector.x * 2;
+    bullet.y += bulletVector.y * 2;
+
+    if (!onScreen(bullet.x, bullet.y)) {
+      me.buls.splice(i, 1);
+    }
   }
 }
-
 function checkCollisions() {
 
   flights.forEach((flight) => {
@@ -270,8 +176,18 @@ function stepLocal() {
   if (!p1) flights[1].x = -32;
 
   // sync flight positions from shared to local
-  if (p0) flights[0].syncFromShared(p0);
-  if (p1) flights[1].syncFromShared(p1);
+  const syncFlight = (localFlight, sharedFlight) => {
+    localFlight.x = sharedFlight.x;
+    localFlight.y = sharedFlight.y;
+    localFlight.r = sharedFlight.r;
+    localFlight.xMouse = sharedFlight.xMouse;
+    localFlight.yMouse = sharedFlight.yMouse;
+    localFlight.rotation = sharedFlight.rotation;
+    localFlight.buls = sharedFlight.buls;
+    localFlight.hits = sharedFlight.hits
+  };
+  if (p0) syncFlight(flights[0], p0);
+  if (p1) syncFlight(flights[1], p1);
 }
 
 function mousePressed() {
@@ -279,19 +195,84 @@ function mousePressed() {
   if (me.playerName === "observer")
     return
 
-  const myFlight = flights.find(f => f.playerName === me.playerName);
-  if (myFlight) {
-    myFlight.shoot();
-    me.buls = myFlight.buls;
-  }
+  let bullet = { x: me.x, y: me.y, xStart: me.x, yStart: me.y, xMouseStart: mouseX, yMouseStart: mouseY }
+
+  //if (me.buls.length < 3) {
+  me.buls.push(bullet)
+  //}
 }
 
 function drawGame() {
   xText = 0
   flights.forEach((flight) => {
-    flight.draw();
+    drawFlight(flight);
+    drawBullets(flight);
+    drawScore(flight);
   });
 
+}
+
+function drawFlight(flight) {
+  fill(flight.color)
+
+  push();
+  imageMode(CENTER);
+  translate(flight.x, flight.y);
+  let head = createVector(
+    flight.xMouse - flight.x,
+    flight.yMouse - flight.y,
+  ).normalize().heading();
+  rotate(head + 1.555);
+  rect(-10, -10, 30, 30)
+  rect(0, -15, 10, 15)
+  //image(flightImages[flight.playerNumber], 0, 0, 24, 20);
+  pop();
+}
+
+function drawBullets(flight) {
+  fill(flight.color)
+
+  if (flight.buls) {
+    flight.buls.forEach((bullet) => {
+      drawBullet(bullet);
+    });
+  }
+}
+
+function drawBullet(bullet) {
+  fill('yellow')
+
+  push();
+  imageMode(CENTER);  
+  translate(bullet.x, bullet.y);
+  let head = createVector(
+    bullet.xMouseStart - bullet.xStart,
+    bullet.yMouseStart - bullet.yStart,
+  ).normalize().heading();
+  rotate(head + 1.555);
+  rect(-3, -3, 10, 10)
+  //image(flightImages[flight.playerNumber], 0, 0, 24, 20);
+  pop();
+
+}
+
+function drawScore(flight) {
+  fill(flight.color)
+
+  xText += 30
+  if (flight.playerName === "player0") {
+    if (flight.hits) {
+      text("Player0 (" + flight.hits[1] + ")", 320, xText)
+    } else {
+      text("Player0", 320, xText)
+    }
+  } else if (flight.playerName === "player1") {
+    if (flight.hits) {
+      text("Player1 (" + flight.hits[0] + ")", 320, xText)
+    } else {
+      text("Player1", 320, xText)
+    }
+  }
 }
 
 function joinGame() {
